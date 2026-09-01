@@ -1,0 +1,53 @@
+{
+  "name": "spellmoney",
+  "version": "1.0.0",
+  "description": "Convierte montos a letras en español, inglés, portugués y francés para cheques, facturas, recibos y contratos, con soporte para las 154 divisas del estándar ISO 4217.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "numero-a-letras",
+    "monto-en-letras",
+    "amount-to-words",
+    "spanish",
+    "english",
+    "portuguese",
+    "french",
+    "invoicing",
+    "facturacion",
+    "cheques",
+    "iso4217",
+    "latam"
+  ],
+  "author": "Brandon Rivera Alvarado",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brandriver-bit/spellmoney-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/brandriver-bit/spellmoney-js/issues"
+  },
+  "homepage": "https://github.com/brandriver-bit/spellmoney-js#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
