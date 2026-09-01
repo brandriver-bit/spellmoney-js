@@ -208,3 +208,121 @@ describe("aLetras", () => {
     expect(IDIOMAS).toEqual(["es", "en", "pt", "fr"]);
   });
 });
+
+// =============================================================================
+// Montos como cadena: lectura decimal exacta
+// =============================================================================
+
+describe("aLetras con monto en cadena", () => {
+  it("equivale al número en los casos normales", () => {
+    expect(aLetras("125.50")).toBe("CIENTO VEINTICINCO DÓLARES CON 50/100");
+    expect(aLetras("0")).toBe("CERO DÓLARES CON 00/100");
+    expect(aLetras("1", { moneda: "GTQ" })).toBe("UN QUETZAL CON 00/100");
+    expect(aLetras("21")).toBe("VEINTIÚN DÓLARES CON 00/100");
+  });
+
+  it("acepta decimales incompletos", () => {
+    expect(aLetras("10.5")).toBe("DIEZ DÓLARES CON 50/100");
+    expect(aLetras("10.")).toBe("DIEZ DÓLARES CON 00/100");
+    expect(aLetras("10.05")).toBe("DIEZ DÓLARES CON 05/100");
+  });
+
+  it("redondea half-up de forma exacta, a diferencia del número", () => {
+    // El double más cercano a 2.675 queda por debajo, así que el number da 67.
+    expect(aLetras(2.675)).toBe("DOS DÓLARES CON 67/100");
+    // La cadena conserva el decimal escrito, así que redondea a 68.
+    expect(aLetras("2.675")).toBe("DOS DÓLARES CON 68/100");
+    expect(aLetras("1.005")).toBe("UN DÓLAR CON 01/100");
+    expect(aLetras("0.005")).toBe("CERO DÓLARES CON 01/100");
+    expect(aLetras("0.004")).toBe("CERO DÓLARES CON 00/100");
+  });
+
+  it("acarrea al entero cuando los centavos llegan a 100", () => {
+    expect(aLetras("19.999")).toBe("VEINTE DÓLARES CON 00/100");
+    expect(aLetras("0.999")).toBe("UN DÓLAR CON 00/100");
+  });
+
+  it("admite el tope del rango", () => {
+    expect(aLetras("999999999999999.99")).toContain("99/100");
+  });
+
+  it("rechaza cadenas inválidas", () => {
+    for (const invalido of ["", "abc", "1,50", "-5", "1.2.3", "1e3", " ", "+5"]) {
+      expect(() => aLetras(invalido)).toThrow(SpellMoneyError);
+    }
+  });
+
+  it("rechaza cadenas fuera de rango", () => {
+    expect(() => aLetras("1000000000000000")).toThrow(SpellMoneyError);
+  });
+});
+
+// =============================================================================
+// Pruebas por propiedades: miles de valores generados, invariantes verificadas
+// =============================================================================
+
+describe("propiedades sobre valores generados", () => {
+  // Generador determinista (mulberry32): la misma semilla da la misma
+  // secuencia, así que un fallo siempre se puede reproducir.
+  function generador(semilla: number): () => number {
+    let a = semilla;
+    return () => {
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  const CODIGOS = Object.keys(MONEDAS);
+
+  it("aLetras cumple sus invariantes sobre 5000 montos al azar", () => {
+    const azar = generador(20260901);
+    for (let i = 0; i < 5000; i++) {
+      const idioma = IDIOMAS[Math.floor(azar() * IDIOMAS.length)]!;
+      const codigo = CODIGOS[Math.floor(azar() * CODIGOS.length)]!;
+      if (!MONEDAS[codigo]![idioma]) continue;
+      const monto = Math.floor(azar() * 1e12) + azar();
+
+      const resultado = aLetras(monto, { moneda: codigo, idioma });
+
+      expect(typeof resultado).toBe("string");
+      expect(resultado.length).toBeGreaterThan(0);
+      expect(resultado).not.toContain("undefined");
+      expect(resultado).not.toContain("NaN");
+      expect(resultado).not.toContain("  ");
+      expect(resultado.trim()).toBe(resultado);
+      expect(resultado).toBe(resultado.toUpperCase());
+      expect(resultado).toMatch(/\d\d\/100$/);
+      // El apócope nunca deja "uno" pegado al nombre de la moneda.
+      if (idioma === "es") expect(` ${resultado} `).not.toContain(" UNO ");
+    }
+  });
+
+  it("número y cadena coinciden en montos de dos decimales", () => {
+    const azar = generador(4217);
+    for (let i = 0; i < 5000; i++) {
+      const entero = Math.floor(azar() * 1e9);
+      const centavos = Math.floor(azar() * 100);
+      const comoCadena = `${entero}.${String(centavos).padStart(2, "0")}`;
+      expect(aLetras(Number(comoCadena))).toBe(aLetras(comoCadena));
+    }
+  });
+
+  it("los conversores de número nunca producen texto malformado", () => {
+    const azar = generador(1954);
+    const motores = [numeroALetras, numeroALetrasEn, numeroALetrasFr, (n: number) => numeroALetrasPt(n, "f")];
+    for (let i = 0; i < 5000; i++) {
+      const n = Math.floor(azar() * 1e15);
+      for (const motor of motores) {
+        const texto = motor(n);
+        expect(texto.length).toBeGreaterThan(0);
+        expect(texto).not.toContain("undefined");
+        expect(texto).not.toContain("NaN");
+        expect(texto).not.toContain("  ");
+        expect(texto.trim()).toBe(texto);
+      }
+    }
+  });
+});

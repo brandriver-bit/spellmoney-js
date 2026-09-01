@@ -1,6 +1,6 @@
 {
   "name": "spellmoney",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Convierte montos a letras en español, inglés, portugués y francés para cheques, facturas, recibos y contratos, con soporte para las 154 divisas del estándar ISO 4217.",
   "type": "module",
   "main": "dist/index.js",

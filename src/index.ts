@@ -414,6 +414,51 @@ function _apocoparUno(idioma: Idioma, cantidad: string, genero: Genero): string 
   return cantidad; // en: sin género; pt: ya viene con el género correcto
 }
 
+const _RE_MONTO = /^\s*(\d+)(?:\.(\d*))?\s*$/;
+
+/**
+ * Separa un monto en su parte entera y sus centavos.
+ *
+ * Con un `string` el corte es exacto: se leen los dígitos tal como fueron
+ * escritos y el redondeo del tercer decimal en adelante es half-up
+ * ("2.675" -> 68 centavos). Con un `number` el resultado depende de la
+ * representación binaria del valor recibido, igual que `toFixed(2)`.
+ */
+function _partirMonto(monto: number | string): { entero: number; centavos: number } {
+  if (typeof monto === "string") {
+    if (/^\s*-/.test(monto)) {
+      throw new SpellMoneyError("no se admiten montos negativos");
+    }
+    const partes = _RE_MONTO.exec(monto);
+    if (!partes) {
+      throw new SpellMoneyError(
+        `monto '${monto}' no es un decimal válido. Se espera algo como "125.50"`
+      );
+    }
+    const entero = Number(partes[1]);
+    if (!Number.isSafeInteger(entero) || entero >= 1e15) {
+      throw new SpellMoneyError("el monto excede el rango soportado (máximo 999,999,999,999,999)");
+    }
+    const decimales = partes[2] ?? "";
+    let centavos = Number((decimales + "00").slice(0, 2));
+    if ((decimales[2] ?? "0") >= "5") centavos += 1;
+    return centavos === 100 ? { entero: entero + 1, centavos: 0 } : { entero, centavos };
+  }
+  if (typeof monto !== "number" || Number.isNaN(monto)) {
+    throw new SpellMoneyError("se esperaba un monto numérico o una cadena decimal");
+  }
+  if (monto < 0) {
+    throw new SpellMoneyError("no se admiten montos negativos");
+  }
+  let entero = Math.trunc(monto);
+  let centavos = Math.round((monto - entero) * 100);
+  if (centavos === 100) {
+    entero += 1;
+    centavos = 0;
+  }
+  return { entero, centavos };
+}
+
 export interface ALetrasOptions {
   moneda?: string;
   idioma?: Idioma;
@@ -425,7 +470,9 @@ export interface ALetrasOptions {
  * Convierte un monto a su representación en letras para documentos legales
  * y financieros.
  *
- * @param monto Cantidad a convertir. Debe ser >= 0.
+ * @param monto Cantidad a convertir. Debe ser >= 0. Puede ser un `number`
+ *   o una cadena decimal (`"125.50"`); la cadena se interpreta de forma
+ *   exacta, sin pasar por la aritmética de punto flotante.
  * @param options.moneda Código ISO 4217 de la moneda (por defecto "USD").
  * @param options.idioma "es" (por defecto), "en", "pt" o "fr". Si la moneda
  *   elegida todavía no tiene traducción a ese idioma, se lanza
@@ -435,7 +482,7 @@ export interface ALetrasOptions {
  * @param options.mayusculas Si es true (por defecto) devuelve el resultado
  *   en mayúsculas.
  */
-export function aLetras(monto: number, options: ALetrasOptions = {}): string {
+export function aLetras(monto: number | string, options: ALetrasOptions = {}): string {
   const { moneda = "USD", idioma = "es", centavos = "fraccion", mayusculas = true } = options;
 
   if (!IDIOMAS.includes(idioma)) {
@@ -456,16 +503,7 @@ export function aLetras(monto: number, options: ALetrasOptions = {}): string {
   if (centavos !== "fraccion" && centavos !== "palabras") {
     throw new SpellMoneyError("centavos debe ser 'fraccion' o 'palabras'");
   }
-  if (monto < 0) {
-    throw new SpellMoneyError("no se admiten montos negativos");
-  }
-
-  let entero = Math.trunc(monto);
-  let parteCentavos = Math.round((monto - entero) * 100);
-  if (parteCentavos === 100) {
-    entero += 1;
-    parteCentavos = 0;
-  }
+  const { entero, centavos: parteCentavos } = _partirMonto(monto);
 
   const info = entradaMoneda[idioma]!;
   const genero = info.genero;
